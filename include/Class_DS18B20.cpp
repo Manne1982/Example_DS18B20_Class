@@ -107,26 +107,26 @@ bool TSensor::loop()
         return false;
     data[10] = 0;
     byte sensConfig = 0x03;
-    u_int16_t meassurementDelay;      
+    u_int16_t measurementDelay;      
     if(data[0] != 0)
         sensConfig = (data[4] >> 5) & 0x03;     //Config on Bit 5 and Bit 6
 
     switch (sensConfig)
     {
     case 0x00:
-        meassurementDelay = 94 + 50; //Datasheet 93,75ms + 50ms safety
+        measurementDelay = 94 + 50; //Datasheet 93,75ms + 50ms safety
         break;
     case 0x01:
-        meassurementDelay = 188 + 50; //Datasheet 187,5ms + 50ms safety
+        measurementDelay = 188 + 50; //Datasheet 187,5ms + 50ms safety
         break;
     case 0x02:
-        meassurementDelay = 375 + 50; //Datasheet 375ms + 50ms safety
+        measurementDelay = 375 + 50; //Datasheet 375ms + 50ms safety
         break;    
     default:
-        meassurementDelay = 750 + 50; //Datasheet 750ms + 50ms safety
+        measurementDelay = 750 + 50; //Datasheet 750ms + 50ms safety
         break;
     }
-    if(millis() < (StartMeasureTime + meassurementDelay)) //Delay time not expired
+    if(millis() < (StartMeasureTime + measurementDelay)) //Delay time not expired
         return false;
     
     data[10] = Source->reset();
@@ -192,4 +192,79 @@ String TSensor::getName()
 bool TSensor::NewValueAvailable()
 {
     return NewValue;
+}
+
+
+TSensorArray::TSensorArray(uint8 port)
+{
+    Port = port;
+    SensorCount = 0;
+    Source = new OneWire(Port);
+    SensorSearch();
+}
+
+TSensorArray::~TSensorArray()
+{
+    if(SensorCount != 0)
+    {
+        for(int i = 0; i < SensorCount; i++)
+        {
+            delete SArray[i];
+        }
+        delete Source;
+    }
+    
+}
+
+uint8 TSensorArray::SensorSearch()
+{
+    if(SensorCount != 0)
+    {
+        for(int i = 0; i < SensorCount; i++)
+        {
+            delete SArray[i];
+        }
+    }
+    for(int i = 0; i < 10; i++)
+    {
+      SArray[i] = new TSensor(Source);
+      if(!SArray[i]->SensSearch())
+      {
+        delete SArray[i];
+        SensorCount = i;
+        return SensorCount;
+      }
+      char Temp[15];
+      sprintf(Temp, "P%dS%d", Port, i);
+      SArray[i]->setName(Temp);
+    }
+    return SensorCount;
+}
+uint8 TSensorArray::GetSensorCount()
+{
+    return SensorCount;
+}
+TSensor * TSensorArray::GetSensor(uint8 Index)
+{
+    if(Index < SensorCount)
+        return SArray[Index];
+    else
+        return 0;
+}
+void TSensorArray::StartConversion()
+{
+    for(int i = 0; i < SensorCount; i++)
+    {
+        SArray[i]->startConversion();
+    }
+}
+uint8 TSensorArray::Loop()
+{
+    CountNewValues = 0;
+    for(int i = 0; i < SensorCount; i++)
+    {
+        if(SArray[i]->loop() || SArray[i]->NewValueAvailable())
+            CountNewValues++;
+    }
+    return CountNewValues;
 }
